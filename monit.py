@@ -1,5 +1,17 @@
 # -*- coding: utf-8 -*-
-#
+'''
+Interface to the Monit system manager and monitor (http://mmonit.com/monit/)
+
+Usage:
+>>> mon = Monit(username='admin', password='monit')
+>>> # mon is a dict:
+>>> a_service_name = mon.keys()[0]
+>>> mon[a_service_name].monitor() # other actions include start, stop, unmonitor
+...
+>>> mon[a_service_name].monitored # see also 'running', 'type', 'name'
+True
+'''
+
 # monit.py
 # Python to Monit HTTP interface
 # Camilo Polymeris, 2015
@@ -10,6 +22,7 @@
 
 import requests
 
+
 class Monit(dict):
     def __init__(self, host='localhost', port=2812, username=None, password='', https=False):
         self.baseurl = (https and 'https://%s:%i' or 'http://%s:%i') % (host, port)
@@ -19,6 +32,9 @@ class Monit(dict):
         self.update()
     
     def update(self):
+        """
+        Update Monit deamon and services status.
+        """
         url = self.baseurl + '/_status?format=xml'
         response = requests.get(url, auth=self.auth)
         from xml.etree.ElementTree import XML
@@ -27,20 +43,27 @@ class Monit(dict):
             serv = Monit.Service(self, serv_el)
             self[serv.name] = serv
             
-    class Service:     
-        def __init__(self, parent, xml):
+    class Service:
+        """
+        Describes a Monit service, i.e. a monitored resource.
+        """
+        def __init__(self, daemon, xml):
+            """
+            Parse service from XML element.
+            """
             self.name = xml.find('name').text
             self.type = {
-                None: "unknown",
-                0: "filesystem",
-                1: "directory",
-                2: "file",
-                3: "process",
-                4: "connection",
-                5: "system"
-            }.get(int(xml.attrib['type']), None)
-            self.parent = parent
+                0: 'filesystem',
+                1: 'directory',
+                2: 'file',
+                3: 'process',
+                4: 'connection',
+                5: 'system'
+            }.get(int(xml.attrib['type']), 'unknown')
+            self.daemon = daemon
             self.running = None
+            if self.type != 'system':
+                self.running = bool(int(xml.find('status').text))
             self.monitored = bool(int(xml.find('monitor').text))
         
         def start(self):
@@ -58,14 +81,18 @@ class Monit(dict):
             self._action('_unmonitor')
         
         def _action(self, action):
-            url = self.parent.baseurl + '/' + self.name
-            requests.post(url, auth=self.parent.auth, data={'action': action})
-            self.parent.update()
+            url = self.daemon.baseurl + '/' + self.name
+            requests.post(url, auth=self.daemon.auth, data={'action': action})
+            self.daemon.update()
         
         def __repr__(self):
             repr = self.type.capitalize()
             if not self.running is None:
                 repr += self.running and ', running' or ', stopped'
             if not self.monitored is None:
-                repr += self.running and ', monitored' or ', not monitored'
+                repr += self.monitored and ', monitored' or ', not monitored'
             return repr
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
