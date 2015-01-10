@@ -1,8 +1,7 @@
 import requests
 
-class Monit:
+class Monit(dict):
     def __init__(self, host='localhost', port=2812, username=None, password='', https=False):
-        self.services = {}
         self.baseurl = (https and 'https://%s:%i' or 'http://%s:%i') % (host, port)
         self.auth = None
         if username:
@@ -16,19 +15,47 @@ class Monit:
         root = XML(response.text)
         for serv_el in root.iter('service'):
             serv = Monit.Service(self, serv_el)
-            self.services[serv.name] = serv
+            self[serv.name] = serv
             
-    class Service:
+    class Service:     
         def __init__(self, parent, xml):
             self.name = xml.find('name').text
+            self.type = {
+                None: "unknown",
+                0: "filesystem",
+                1: "directory",
+                2: "file",
+                3: "process",
+                4: "connection",
+                5: "system"
+            }.get(int(xml.attrib['type']), None)
+            self.parent = parent
             self.running = None
-            self.monitored = None
+            self.monitored = bool(int(xml.find('monitor').text))
         
         def start(self):
-            pass
+            self._action('start')
         
         def stop(self):
-            pass
+            self._action('stop')
         
-        def monitor(self, monitor):
-            pass
+        def monitor(self, monitor=True):
+            if not monitor:
+                return self.unmonitor()
+            self._action('monitor')
+            
+        def unmonitor(self):
+            self._action('_unmonitor')
+        
+        def _action(self, action):
+            url = self.parent.baseurl + '/' + self.name
+            requests.post(url, auth=self.parent.auth, data={'action': action})
+            self.parent.update()
+        
+        def __repr__(self):
+            repr = self.type.capitalize()
+            if not self.running is None:
+                repr += self.running and ', running' or ', stopped'
+            if not self.monitored is None:
+                repr += self.running and ', monitored' or ', not monitored'
+            return repr
