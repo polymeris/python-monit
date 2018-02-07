@@ -7,5 +7,5 @@ setup(
     author_email='cpolymeris@gmail.com',
     url='https://github.com/polymeris/python-monit',
     py_modules=['monit'],
-    requires=['requests', 'time']
+    requires=['requests']
     )
