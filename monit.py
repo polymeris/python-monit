@@ -62,7 +62,10 @@ class Monit(dict):
             self.daemon = daemon
             self.running = None
             if self.type != 'system':
-                self.running = not bool(int(xml.find('status').text))
+                if xml.find('pid') is not None:
+                    self.running = True
+                else:
+                    self.running = False
             self.monitored = bool(int(xml.find('monitor').text))
         
         def start(self):
