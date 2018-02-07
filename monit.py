@@ -21,6 +21,8 @@ True
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import requests
+import time
+
 
 class Monit(dict):
     def __init__(self, host='localhost', port=2812, username=None, password='', https=False):
@@ -41,6 +43,14 @@ class Monit(dict):
         for serv_el in root.iter('service'):
             serv = Monit.Service(self, serv_el)
             self[serv.name] = serv
+            # Pendingaction occurs when a service is stopping
+            if self[serv.name].pendingaction:
+                time.sleep(1)
+                return Monit.update(self)
+            # Monitor == 2 when service in startup
+            if self[serv.name].monitor == 2:
+                time.sleep(1)
+                return Monit.update(self)
             
     class Service:
         """
@@ -67,15 +77,17 @@ class Monit(dict):
                 else:
                     self.running = False
             self.monitored = bool(int(xml.find('monitor').text))
-        
+            self.pendingaction = bool(int(xml.find('pendingaction').text))
+            self.monitor = int(xml.find('monitor').text)
+
         def start(self):
             self._action('start')
         
-        def stop(self):
-            self._action('stop')
-        
         def restart(self):
             self._action('restart')
+        
+        def stop(self):
+            self._action('stop')
         
         def monitor(self, monitor=True):
             if not monitor:
