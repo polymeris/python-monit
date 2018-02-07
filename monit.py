@@ -21,7 +21,7 @@ True
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import requests
-
+import time
 
 class Monit(dict):
     def __init__(self, host='localhost', port=2812, username=None, password='', https=False):
@@ -72,13 +72,18 @@ class Monit(dict):
         def stop(self):
             self._action('stop')
         
+        def restart(self):
+            self._action('stop')
+            time.sleep(1)
+            self._action('start')
+        
         def monitor(self, monitor=True):
             if not monitor:
                 return self.unmonitor()
             self._action('monitor')
             
         def unmonitor(self):
-            self._action('_unmonitor')
+            self._action('unmonitor')
         
         def _action(self, action):
             url = self.daemon.baseurl + '/' + self.name
