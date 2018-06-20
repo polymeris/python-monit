@@ -27,9 +27,10 @@ import time
 class Monit(dict):
     def __init__(self, host='localhost', port=2812, username=None, password='', https=False):
         self.baseurl = (https and 'https://%s:%i' or 'http://%s:%i') % (host, port)
-        self.auth = None
+        self.s = requests.Session()
+        self.s.auth = None
         if username:
-            self.auth = requests.auth.HTTPBasicAuth(username, password)
+            self.s.auth = requests.auth.HTTPBasicAuth(username, password)
         self.update()
     
     def update(self):
@@ -37,7 +38,8 @@ class Monit(dict):
         Update Monit deamon and services status.
         """
         url = self.baseurl + '/_status?format=xml'
-        response = requests.get(url, auth=self.auth)
+        response = self.s.get(url)
+        response.raise_for_status()
         from xml.etree.ElementTree import XML
         root = XML(response.text)
         for serv_el in root.iter('service'):
@@ -48,7 +50,7 @@ class Monit(dict):
                 time.sleep(1)
                 return Monit.update(self)
             # Monitor == 2 when service in startup
-            if self[serv.name].monitor == 2:
+            if self[serv.name].monitorState == 2:
                 time.sleep(1)
                 return Monit.update(self)
             
@@ -78,7 +80,7 @@ class Monit(dict):
                     self.running = False
             self.monitored = bool(int(xml.find('monitor').text))
             self.pendingaction = bool(int(xml.find('pendingaction').text))
-            self.monitor = int(xml.find('monitor').text)
+            self.monitorState = int(xml.find('monitor').text)
 
         def start(self):
             self._action('start')
@@ -99,7 +101,12 @@ class Monit(dict):
         
         def _action(self, action):
             url = self.daemon.baseurl + '/' + self.name
-            requests.post(url, auth=self.daemon.auth, data={'action': action})
+            if self.daemon.s.auth:
+                postdata = {'securitytoken': self.daemon.s.cookies['securitytoken'], 'action': action}
+            else:
+                postdata = {'action': action}
+            response = self.daemon.s.post(url, data=postdata)
+            response.raise_for_status()
             self.daemon.update()
         
         def __repr__(self):
